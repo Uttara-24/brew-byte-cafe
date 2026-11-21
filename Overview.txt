@@ -1,0 +1,3750 @@
+---------------------------------------------------------------- Welcome to Brew-byte Cafe -------------------------------------------------------------------
+
+FLOW 
+
+Login
+  ↓
+Add food to cart
+  ↓
+View cart
+  ↓
+Checkout
+  ↓
+Apply coupon (optional)
+  ↓
+Calculate subtotal
+  ↓
+Calculate discount
+  ↓
+Calculate final amount
+  ↓
+Payment
+  ↓
+Order confirmed
+
+
+
+Content 
+1. Requirements
+2. Setting configurations
+3. User App
+4. Menu App
+5. Order App
+6. Inventory App
+7. 
+
+
+1. Make a folder named - brewbyte cafe
+   make another folder inside brewbyte cafe named - backend 
+
+2. inside backend run - python -m venv venv -> to create virtual environment 
+
+3. activate the virtual environment -> venv\Scripts\activate
+   it will look like this ->>> (venv) C:\Users\Uttara Deodhar\OneDrive\Documents\brewbyte cafe\backend>
+
+4. install packages -
+   pip install django djangorestframework psycopg2-binary django-cors-headers
+
+Package	                                       Purpose
+django	                                       backend framework
+djangorestframework	                       API creation
+psycopg2-binary	                               PostgreSQL connection
+django-cors-headers	                       React ↔ Django communication
+
+5. Create Django project -> django-admin startproject core .
+
+6. create apps 
+   	python manage.py startapp users
+	python manage.py startapp menu
+	python manage.py startapp orders
+	python manage.py startapp reservations
+
+something was pressed due to which venv was activated -> so to again come into normal ran deactivate
+
+7. Register the apps in core/setting.py
+
+INSTALLED_APPS = [
+    ...
+    'rest_framework',
+    'corsheaders',
+
+    'users',
+    'menu',
+    'orders',
+    'reservations',
+]
+
+8. Add cors middleware in the same core/setting.py middleware section 
+'corsheaders.middleware.CorsMiddleware',
+
+9. Allow react frontend -> CORS_ALLOW_ALL_ORIGINS = True (settings.py)
+
+10. Configure postgres sql in settings.py
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'brewbytecafe',
+        'USER': 'postgres',
+        'PASSWORD': 'admin',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+
+11. run migrations - before this create database on sql (open pgAdmin 4 and create database manually)
+    after that run migrate command -> python manage.py migrate 
+
+12. create a Admin user (super user in terms of Django)
+    python manage.py createsuperuser
+
+Username: uttarad
+Email address: uttarad@gmail.com
+Password: May@1234567890
+Password (again): May@1234567890
+Superuser created successfully.
+
+13. Check the Django server 
+	 - Your backend foundation is ready.
+
+Next step - 
+Custom User Model
+Signup API
+Login API
+JWT Authentication
+
+And test using:
+
+Postman
+
+THIS is where real backend learning starts.
+
+14. install jwt library
+pip install djangorestframework-simplejwt
+
+15. Create Custom User Model
+users/models.py
+
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+
+
+class User(AbstractUser):
+
+    ROLE_CHOICES = (
+        ('customer', 'Customer'),
+        ('admin', 'Admin'),
+        ('staff', 'Staff'),
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='customer'
+    )
+
+    phone_number = models.CharField(
+        max_length=15,
+        blank=True,
+        null=True
+    )
+
+    def __str__(self):
+        return self.username
+
+16. Tell Django to Use This Model
+
+core/settings.py
+
+add at the bottom -> AUTH_USER_MODEL = 'users.User'
+
+17. Delete Old DB Tables
+
+Since only initial migrations exist.
+
+Delete:
+
+database tables OR recreate database
+
+Easiest:
+Drop DB and recreate.
+
+In pgAdmin:
+
+Delete database brewbytecafe
+Create again
+STEP 5 — Create Migrations
+
+Run:
+
+python manage.py makemigrations
+
+Then:
+
+python manage.py migrate
+
+19. create serializer
+users/serializers.py 
+
+from rest_framework import serializers
+from .models import User
+from django.contrib.auth.password_validation import validate_password
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password]
+    )
+
+    class Meta:
+        model = User
+        fields = (
+            'username',
+            'email',
+            'password',
+            'phone_number',
+            'role'
+        )
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            phone_number=validated_data.get('phone_number'),
+            role=validated_data.get('role', 'customer')
+        )
+
+        return user
+
+
+20. Create Signup API
+
+users/views.py
+
+
+from rest_framework import generics
+from .serializers import RegisterSerializer
+from .models import User
+
+
+class RegisterView(generics.CreateAPIView):
+
+    queryset = User.objects.all()
+    serializer_class = RegisterSerializer
+
+21. creals urls
+
+users/urls.py
+
+from django.urls import path
+from .views import RegisterView
+
+urlpatterns = [
+    path('register/', RegisterView.as_view(), name='register'),
+]
+
+22. Connect App URLs
+
+core/urls.py
+
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+
+    path('api/users/', include('users.urls')),
+]
+
+23. TEST SIGNUP API ->>> On postman application
+
+python manage.py runserver
+
+http://127.0.0.1:8000/api/users/register/ -> post 
+
+give raw body - 
+
+{
+    "username": "uttara",
+    "email": "uttara@gmail.com",
+    "password": "Uttara@123",
+    "phone_number": "9876543210",
+    "role": "customer"
+}
+
+output - 
+{
+    "username": "uttara",
+    "email": "uttara@gmail.com",
+    "phone_number": "9876543210",
+    "role": "customer"
+}
+
+24. JWT Authentication Setup
+
+core/settings.py
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
+
+25. Add JWT URLs
+
+core/urls.py
+
+from django.urls import include, path
+
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from django.contrib import admin
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+
+    path('api/users/', include('users.urls')),
+
+    path('api/token/', TokenObtainPairView.as_view(),
+         name='token_obtain_pair'),
+
+    path('api/token/refresh/', TokenRefreshView.as_view(),
+         name='token_refresh'),
+]
+
+26. TEST LOGIN API
+
+http://127.0.0.1:8000/api/token/ -> post 
+
+give raw body - 
+
+{
+    "username": "uttara",
+    "password": "Uttara@123"
+}
+
+output -
+
+{
+    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3OTcwNDA5NywiaWF0IjoxNzc5NjE3Njk3LCJqdGkiOiI0OTAxNjY3YjMwMzY0YTg2YWRiNmQyMjAwYWYzYmNhNiIsInVzZXJfaWQiOiIxIn0.oYSHcjQ_eo59Fx9ZubICtVI2hcaFSqOnW3bvYmg0vGg",
+    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5NjE3OTk3LCJpYXQiOjE3Nzk2MTc2OTcsImp0aSI6ImU5NGRhNjM3N2QyMjQ3NzM5YjJkOWZkMTdlZThmMGFkIiwidXNlcl9pZCI6IjEifQ.M_jEF1M7fZHgIzzIHT-8Uqnf1i3UI7_u4vVIXBipMRo"
+}
+
+
+Now we start the actual café logic.
+
+This module is VERY important because it teaches:
+
+a. model relationships
+b. serializers
+c. CRUD APIs
+d. foreign keys
+e. admin panel
+f. image handling later
+
+MENU MODULE ARCHITECTURE
+
+We will create:
+
+Models
+-> Category
+-> MenuItem
+
+RELATIONSHIP
+
+One category → many food items
+
+Example:
+
+Category → Beverages
+    ├── Cold Coffee
+    ├── Cappuccino
+    └── Mojito
+
+This is called: One-to-Many Relationship Using: ForeignKey
+
+27. Create Models 
+
+menu/models.py
+
+from django.db import models
+
+
+class Category(models.Model):
+
+    name = models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.name
+
+
+class MenuItem(models.Model):
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name='menu_items'
+    )
+
+    name = models.CharField(max_length=200)
+
+    description = models.TextField()
+
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    is_available = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+Understanding Imp concept - Foreign key 
+
+code = category = models.ForeignKey(...)
+
+Meaning:
+Each food item belongs to ONE category.
+
+code = on_delete=models.CASCADE
+
+If category deleted:
+all related food items deleted.
+
+code = related_name
+
+Allows: category.menu_items.all()  [Very useful later]
+
+28. Create Migrations
+
+python manage.py makemigrations
+
+python manage.py migrate
+
+
+29. Register Models in Admin
+
+Go to: menu/admin.py
+
+Add:
+
+from django.contrib import admin
+from .models import Category, MenuItem
+
+admin.site.register(Category)
+admin.site.register(MenuItem)
+
+30. python manage.py runserver
+
+open - http://127.0.0.1:8000/admin
+
+Login.
+
+You should now see:
+Categories
+Menu Items
+
+This is your FIRST admin panel feature.
+
+--------  Add Sample Categories
+Inside admin:
+
+Create:
+a. Beverages
+b. Breakfast
+c. Lunch
+d. Dinner
+e. Snacks
+f. Chinese
+h. Italian
+
+--------  Add Sample Menu Items
+
+Category
+Beverages
+
+Item
+Cold Coffee
+
+Description
+Creamy cold coffee with ice cream
+
+Price
+180
+
+31. Create Serializers
+
+from rest_framework import serializers
+from .models import Category, MenuItem
+
+
+class CategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Category
+        fields = '__all__'
+
+
+class MenuItemSerializer(serializers.ModelSerializer):
+
+    category = CategorySerializer(read_only=True)
+
+    class Meta:
+        model = MenuItem
+        fields = '__all__'
+
+---- Why Nested Serializer?
+
+Instead of returning only:
+
+"category": 1
+
+It returns:
+
+"category": {
+    "id": 1,
+    "name": "Beverages"
+}
+
+[Looks professional.]
+
+32. Create APIs
+
+menu/views.py
+
+from rest_framework import generics
+from .models import Category, MenuItem
+from .serializers import (
+    CategorySerializer,
+    MenuItemSerializer
+)
+
+
+class CategoryListView(generics.ListAPIView):
+
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+
+
+class MenuItemListView(generics.ListAPIView):
+
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+
+
+33. Create URLs
+
+menu/urls.py
+
+from django.urls import path
+from .views import (
+    CategoryListView,
+    MenuItemListView
+)
+
+urlpatterns = [
+    path('categories/', CategoryListView.as_view()),
+
+    path('items/', MenuItemListView.as_view()),
+]
+
+34. Connect URLs
+
+core/urls.py
+
+Add - path('api/menu/', include('menu.urls')),
+
+35. TEST IN POSTMAN
+
+Categories API
+GET  http://127.0.0.1:8000/api/menu/categories/
+
+Menu Items API
+GET  http://127.0.0.1:8000/api/menu/items/ 
+
+--------- CURRENT PROBLEM
+
+Right now:
+ANYONE can access APIs.
+
+That is not secure.
+
+We need:
+
+customers → only view menu
+admin/staff → manage menu
+
+36. Create Custom Permission
+
+menu/permissions.py
+
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminOrStaff(BasePermission):
+
+    def has_permission(self, request, view):
+
+        return (
+            request.user.is_authenticated and
+            request.user.role in ['admin', 'staff']
+        )
+
+WHAT THIS DOES
+
+Only logged-in users having:
+
+admin
+OR
+staff
+
+can modify menu.
+
+Very common real-world pattern.
+
+37. Create CRUD APIs
+
+menu/views.py
+
+from rest_framework import generics
+from rest_framework.permissions import AllowAny
+
+from .models import Category, MenuItem
+
+from .serializers import (
+    CategorySerializer,
+    MenuItemSerializer
+)
+
+from .permissions import IsAdminOrStaff
+
+
+# VIEW ALL CATEGORIES
+class CategoryListView(generics.ListAPIView):
+
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [AllowAny]
+
+
+# VIEW ALL MENU ITEMS
+class MenuItemListView(generics.ListAPIView):
+
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+    permission_classes = [AllowAny]
+
+
+# ADD MENU ITEM
+class MenuItemCreateView(generics.CreateAPIView):
+
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+    permission_classes = [IsAdminOrStaff]
+
+
+# UPDATE MENU ITEM
+class MenuItemUpdateView(generics.UpdateAPIView):
+
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+    permission_classes = [IsAdminOrStaff]
+
+
+# DELETE MENU ITEM
+class MenuItemDeleteView(generics.DestroyAPIView):
+
+    queryset = MenuItem.objects.all()
+    serializer_class = MenuItemSerializer
+    permission_classes = [IsAdminOrStaff]
+
+
+
+38. FIX SERIALIZER FOR CREATE API
+
+Currently category is read-only.
+
+So create/update won’t work.
+
+menu/serializers.py
+
+from rest_framework import serializers
+from .models import Category, MenuItem
+
+
+class CategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Category
+        fields = '__all__'
+
+
+class MenuItemSerializer(serializers.ModelSerializer):
+
+    category_details = CategorySerializer(
+        source='category',
+        read_only=True
+    )
+
+    class Meta:
+        model = MenuItem
+        fields = [
+            'id',
+            'category',
+            'category_details',
+            'name',
+            'description',
+            'price',
+            'is_available',
+            'created_at'
+        ]
+
+WHY THIS CHANGE?
+
+Now:
+
+category → used while creating/updating
+category_details → used while displaying
+
+Professional API design.
+
+
+39. Add urls
+
+menu/urls.py
+
+from django.urls import path
+
+from .views import (
+    CategoryListView,
+    MenuItemListView,
+    MenuItemCreateView,
+    MenuItemUpdateView,
+    MenuItemDeleteView,
+)
+
+urlpatterns = [
+
+    path(
+        'categories/',
+        CategoryListView.as_view()
+    ),
+
+    path(
+        'items/',
+        MenuItemListView.as_view()
+    ),
+
+    path(
+        'items/create/',
+        MenuItemCreateView.as_view()
+    ),
+
+    path(
+        'items/update/<int:pk>/',
+        MenuItemUpdateView.as_view()
+    ),
+
+    path(
+        'items/delete/<int:pk>/',
+        MenuItemDeleteView.as_view()
+    ),
+]
+
+
+
+CREATE ADMIN USER
+
+Your normal customer cannot add items.
+
+Create one admin user.
+
+Open Django shell:
+
+cmd - python manage.py shell
+
+code =========
+
+from users.models import User
+
+user = User.objects.get(username='uttara')
+
+user.role = 'admin'
+
+user.save()
+
+
+
+
+exit the shell
+
+exit()
+
+40. Get JWT Token 
+
+http://127.0.0.1:8000/api/token/ --->>> POST 
+
+body - 
+
+{
+    "username": "uttara",
+    "password": "Uttara@123"
+}
+
+Copy:
+
+access token
+
+{
+    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc3OTgwOTgxMiwiaWF0IjoxNzc5NzIzNDEyLCJqdGkiOiI2Y2IxZjFkMDFlMjU0ZDU3YWE0NTA4NzRhMWMwNzE0OSIsInVzZXJfaWQiOiIxIn0.VMwzCTnt81TC8pWHUe76qrwIP_SFRbzELskqOs6OXHE",
+    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc5NzIzNzEyLCJpYXQiOjE3Nzk3MjM0MTIsImp0aSI6ImMyYzdmMTEzMDc3YzQxNTZhMDJmZjQzNjE0NWZkNTYyIiwidXNlcl9pZCI6IjEifQ.oF5K5y5-nsjIWx2s4RJZIHnadoEq2yZh_cZLl91ks00"
+}
+
+
+TEST CREATE API
+POST
+http://127.0.0.1:8000/api/menu/items/create/
+HEADERS
+Authorization
+Bearer YOUR_ACCESS_TOKEN
+
+IMPORTANT:
+Space after Bearer.
+
+BODY → RAW JSON
+{
+    "category": 1,
+    "name": "Veg Burger",
+    "description": "Loaded crispy burger",
+    "price": "220.00",
+    "is_available": true
+}
+
+SUCCESS RESPONSE
+{
+    "id": 1,
+    "category": 1,
+    "category_details": {
+        "id": 1,
+        "name": "Snacks"
+    },
+    "name": "Veg Burger",
+    "description": "Loaded crispy burger",
+    "price": "220.00",
+    "is_available": true
+}
+
+
+TEST UPDATE API
+PUT
+http://127.0.0.1:8000/api/menu/items/update/1/
+
+Body:
+
+{
+    "category": 1,
+    "name": "Cheese Veg Burger",
+    "description": "Loaded burger with cheese",
+    "price": "250.00",
+    "is_available": true
+}
+
+
+TEST DELETE API
+DELETE
+http://127.0.0.1:8000/api/menu/items/delete/1/
+
+WHAT YOU JUST LEARNED
+
+This is BIG learning.
+
+You now know:
+✅ CRUD APIs
+✅ protected APIs
+✅ custom permissions
+✅ JWT authorization
+✅ role-based access
+✅ update/delete views
+✅ authenticated requests
+
+This is real backend engineering.
+
+
+YOUR BACKEND IS NOW STARTING TO LOOK PROFESSIONAL
+
+Current features:
+
+authentication
+JWT
+PostgreSQL
+menu management
+role permissions
+admin APIs
+
+This is already better than many tutorial projects.
+
+
+Order Module
+
+41. orders/models.py
+
+from django.db import models
+from users.models import User
+from menu.models import MenuItem
+
+
+class Cart(models.Model):
+
+    customer = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"{self.customer.username} Cart"
+
+
+class CartItem(models.Model):
+
+    cart = models.ForeignKey(
+        Cart,
+        on_delete=models.CASCADE,
+        related_name="cart_items"
+    )
+
+    menu_item = models.ForeignKey(
+        MenuItem,
+        on_delete=models.CASCADE
+    )
+
+    quantity = models.PositiveIntegerField(
+        default=1
+    )
+
+    def __str__(self):
+        return self.menu_item.name
+
+
+Why These Relationships?
+Cart
+
+One user → one cart
+
+User ---- 1 : 1 ---- Cart
+
+Using:
+
+OneToOneField
+Cart Items
+
+One cart → many food items
+
+Cart ---- 1 : many ---- CartItems
+
+Using:
+
+ForeignKey
+
+42. python manage.py makemigrations
+    python manage.py migrate
+
+43. orders/admin.py
+
+from django.contrib import admin
+from .models import Cart, CartItem
+
+admin.site.register(Cart)
+admin.site.register(CartItem)
+
+44. orders/serializers.py
+
+
+from rest_framework import serializers
+
+from .models import CartItem
+from menu.models import MenuItem
+
+
+class AddToCartSerializer(serializers.Serializer):
+
+    menu_item_id = serializers.IntegerField()
+
+    quantity = serializers.IntegerField()
+
+Why Simple Serializer Here? ---------------------------------------------------------------------
+
+Because we only need:
+
+{
+   "menu_item_id": 1,
+   "quantity": 2
+}
+
+Not the full cart model.
+
+45. Add to cart API
+
+orders/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from .models import Cart, CartItem
+from .serializers import AddToCartSerializer
+from menu.models import MenuItem
+
+
+class AddToCartView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        serializer = AddToCartSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        cart, created = Cart.objects.get_or_create(
+            customer=request.user
+        )
+
+        menu_item = MenuItem.objects.get(
+            id=serializer.validated_data[
+                "menu_item_id"
+            ]
+        )
+
+        cart_item, created = CartItem.objects.get_or_create(
+            cart=cart,
+            menu_item=menu_item
+        )
+
+        cart_item.quantity += serializer.validated_data[
+            "quantity"
+        ]
+
+        cart_item.save()
+
+        return Response({
+            "message": "Added to cart"
+        })
+
+46. URLS
+
+orders/urls.py
+
+from django.urls import path
+from .views import AddToCartView
+
+urlpatterns = [
+
+    path(
+        "cart/add/",
+        AddToCartView.as_view()
+    )
+
+]
+
+47. Connect urls
+
+core/urls.py
+
+path('api/orders/',include('orders.urls')),
+
+
+48. Test in Postman
+
+http://127.0.0.1:8000/api/orders/cart/add/ -> POST
+
+
+View Cart API → Total Price Calculation → Place Order API
+
+49. Add order models
+
+orders/models.py
+
+class Order(models.Model):
+
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('preparing', 'Preparing'),
+        ('ready', 'Ready'),
+        ('delivered', 'Delivered')
+    )
+
+    customer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
+
+    total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return f"Order {self.id}"
+
+
+class OrderItem(models.Model):
+
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='order_items'
+    )
+
+    menu_item = models.ForeignKey(
+        MenuItem,
+        on_delete=models.CASCADE
+    )
+
+    quantity = models.PositiveIntegerField()
+
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    def __str__(self):
+        return self.menu_item.name
+
+
+
+python manage.py makemigrations
+python manage.py migrate
+
+50. Add cart item serializer
+
+orders/serializers.py
+
+from rest_framework import serializers
+from .models import CartItem
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+
+    item_name = serializers.CharField(
+        source='menu_item.name',
+        read_only=True
+    )
+
+    item_price = serializers.DecimalField(
+        source='menu_item.price',
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
+    )
+
+    class Meta:
+
+        model = CartItem
+
+        fields = [
+            'id',
+            'item_name',
+            'item_price',
+            'quantity'
+        ]
+
+51. orders/views.py
+
+from decimal import Decimal
+from .serializers import CartItemSerializer
+from rest_framework.views import APIView
+
+
+class ViewCartView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        cart = Cart.objects.filter(
+            customer=request.user
+        ).first()
+
+        if not cart:
+
+            return Response({
+                "message": "Cart empty"
+            })
+
+        cart_items = cart.cart_items.all()
+
+        serializer = CartItemSerializer(
+            cart_items,
+            many=True
+        )
+
+        total = Decimal("0")
+
+        for item in cart_items:
+
+            total += (
+                item.menu_item.price *
+                item.quantity
+            )
+
+        return Response({
+
+            "items": serializer.data,
+
+            "total_price": total
+        })
+
+Place order API
+
+class PlaceOrderView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        cart = Cart.objects.get(
+            customer=request.user
+        )
+
+        cart_items = cart.cart_items.all()
+
+        if not cart_items:
+
+            return Response({
+                "message": "Cart empty"
+            })
+
+        order = Order.objects.create(
+            customer=request.user
+        )
+
+        total = Decimal("0")
+
+        for item in cart_items:
+
+            OrderItem.objects.create(
+
+                order=order,
+
+                menu_item=item.menu_item,
+
+                quantity=item.quantity,
+
+                price=item.menu_item.price
+            )
+
+            total += (
+                item.menu_item.price *
+                item.quantity
+            )
+
+        order.total_price = total
+
+        order.save()
+
+        cart_items.delete()
+
+        return Response({
+
+            "message": "Order placed",
+
+            "order_id": order.id,
+
+            "total": total
+        })
+
+
+Test view api & placr order api
+
+http://127.0.0.1:8000/api/orders/cart/ -> GET
+
+Header:
+
+Authorization: Bearer ACCESS_TOKEN
+
+Expected:
+
+{
+   "items":[
+      {
+         "item_name":"Cold Coffee",
+         "item_price":"180.00",
+         "quantity":2
+      }
+   ],
+   "total_price":"360.00"
+}
+Place Order
+
+POST:
+
+http://127.0.0.1:8000/api/orders/place-order/
+
+Header:
+
+Authorization: Bearer ACCESS_TOKEN
+
+Expected:
+
+{
+   "message":"Order placed",
+   "order_id":1,
+   "total":"360.00"
+}
+
+What You Learned Here
+
+You now implemented:
+
+✅ Cart system
+✅ Total price calculation
+✅ Order creation
+✅ Order items
+✅ Cart clearing after order
+✅ Protected APIs
+✅ Multi-model relationships
+
+Order History + Order Details + Status Management
+
+This allows users to:
+
+see previous orders
+track status
+view items inside orders
+
+And admins can later update statuses.
+
+52. serializer for order 
+
+from .models import Order, OrderItem
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+
+    item_name = serializers.CharField(
+        source='menu_item.name',
+        read_only=True
+    )
+
+    class Meta:
+
+        model = OrderItem
+
+        fields = [
+            'item_name',
+            'quantity',
+            'price'
+        ]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+
+    items = OrderItemSerializer(
+        source='order_items',
+        many=True,
+        read_only=True
+    )
+
+    class Meta:
+
+        model = Order
+
+        fields = [
+            'id',
+            'status',
+            'total_price',
+            'created_at',
+            'items'
+        ]
+
+53. Create Order History API
+
+orders/views.py
+
+Import serializer:
+
+from .serializers import (
+    AddToCartSerializer,
+    CartItemSerializer,
+    OrderSerializer
+)
+
+class OrderHistoryView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        orders = Order.objects.filter(
+            customer=request.user
+        ).order_by('-created_at')
+
+        serializer = OrderSerializer(
+            orders,
+            many=True
+        )
+
+        return Response(
+            serializer.data
+        )
+
+54. URLS
+
+path(
+    "history/",
+    OrderHistoryView.as_view()
+),
+
+55. Test 
+
+http://127.0.0.1:8000/api/orders/history/ - GET 
+
+authorization 
+
+expected o/p
+
+[
+    {
+        "id": 1,
+        "status": "pending",
+        "total_price": "750.00",
+        "created_at": "2026-06-04T15:38:13.722095Z",
+        "items": [
+            {
+                "item_name": "Cheese Veg Burger",
+                "quantity": 3,
+                "price": "250.00"
+            }
+        ]
+    }
+]
+
+
+56. create status update serailizer
+
+class OrderStatusSerializer(serializers.ModelSerializer):
+
+    class Meta:
+
+        model = Order
+
+        fields = ['status']
+
+create permissions in permissions.py
+
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminOrStaff(BasePermission):
+
+    def has_permission(self, request, view):
+
+        return (
+
+            request.user.is_authenticated and
+
+            request.user.role in [
+
+                'admin',
+
+                'staff'
+
+            ]
+        )
+
+
+Why separate permission?
+
+Because:
+
+Customer → cannot update order
+Admin → can
+Staff → can
+
+Real-world access control.
+
+
+57. Create Update Status API
+
+from .permissions import IsAdminOrStaff
+
+from .serializers import (
+    AddToCartSerializer,
+    CartItemSerializer,
+    OrderSerializer,
+    OrderStatusSerializer
+)
+
+class UpdateOrderStatusView(APIView):
+
+    permission_classes = [IsAdminOrStaff]
+
+    def patch(self, request, pk):
+
+        try:
+
+            order = Order.objects.get(
+
+                id=pk
+            )
+
+        except Order.DoesNotExist:
+
+            return Response({
+
+                "message": "Order not found"
+
+            }, status=404)
+
+        serializer = OrderStatusSerializer(
+
+            order,
+
+            data=request.data,
+
+            partial=True
+        )
+
+        serializer.is_valid(
+
+            raise_exception=True
+        )
+
+        serializer.save()
+
+        return Response({
+
+            "message": "Status updated",
+
+            "status": serializer.data
+        })
+
+Why PATCH?
+
+PATCH updates only:
+
+{
+   "status":"preparing"
+}
+
+Instead of entire order.
+
+orders/urls.py
+
+Import:
+
+UpdateOrderStatusView
+
+Add:
+
+path(
+
+    "status/<int:pk>/",
+
+    UpdateOrderStatusView.as_view()
+
+),
+
+
+est API
+
+Method:
+
+PATCH
+
+URL:
+
+http://127.0.0.1:8000/api/orders/status/1/
+
+Header:
+
+Authorization: Bearer ADMIN_TOKEN
+
+Body:
+
+{
+   "status":"preparing"
+}
+
+Expected:
+
+{
+   "message":"Status updated",
+   "status":{
+      "status":"preparing"
+   }
+}
+
+Customer Flow Now
+Customer Places Order
+        ↓
+Pending
+        ↓
+Staff Changes Status
+        ↓
+Preparing
+        ↓
+Ready
+        ↓
+Delivered
+
+
+What You Learned
+
+You now know:
+
+✅ PATCH APIs
+✅ Role-based permissions
+✅ Workflow design
+✅ Protected updates
+✅ Business logic restrictions
+
+
+Reservation Module
+
+reservations/models.py
+
+from django.db import models
+from users.models import User
+
+
+class Reservation(models.Model):
+
+    STATUS_CHOICES = (
+
+        ('booked', 'Booked'),
+
+        ('completed', 'Completed'),
+
+        ('cancelled', 'Cancelled')
+    )
+
+    customer = models.ForeignKey(
+
+        User,
+
+        on_delete=models.CASCADE,
+
+        related_name='reservations'
+    )
+
+    table_number = models.IntegerField()
+
+    reservation_date = models.DateField()
+
+    reservation_time = models.TimeField()
+
+    number_of_people = models.PositiveIntegerField()
+
+    status = models.CharField(
+
+        max_length=20,
+
+        choices=STATUS_CHOICES,
+
+        default='booked'
+    )
+
+    created_at = models.DateTimeField(
+
+        auto_now_add=True
+    )
+
+    def __str__(self):
+
+        return f"{self.customer.username} - Table {self.table_number}"
+
+Why These Fields?
+customer → who booked
+
+table_number → which table
+
+date + time → slot
+
+people count → seating
+
+status → booking lifecycle
+
+python manage.py makemigrations
+python manage.py migrate
+
+
+admin.py
+
+from django.contrib import admin
+from .models import Reservation
+
+admin.site.register(Reservation)
+
+serializers.py
+from rest_framework import serializers
+from .models import Reservation
+
+
+class ReservationSerializer(
+
+    serializers.ModelSerializer
+):
+
+    class Meta:
+
+        model = Reservation
+
+        fields = '__all__'
+
+        read_only_fields = (
+
+            'customer',
+
+            'status',
+
+            'created_at'
+        )
+
+vires.py
+
+from rest_framework.views import APIView
+
+from rest_framework.response import Response
+
+from rest_framework.permissions import IsAuthenticated
+
+from .models import Reservation
+
+from .serializers import ReservationSerializer
+
+
+class CreateReservationView(APIView):
+
+    permission_classes = [
+
+        IsAuthenticated
+    ]
+
+    def post(self, request):
+
+        serializer = ReservationSerializer(
+
+            data=request.data
+        )
+
+        serializer.is_valid(
+
+            raise_exception=True
+        )
+
+        table_exists = Reservation.objects.filter(
+
+            table_number=serializer.validated_data[
+                'table_number'
+            ],
+
+            reservation_date=serializer.validated_data[
+                'reservation_date'
+            ],
+
+            reservation_time=serializer.validated_data[
+                'reservation_time'
+            ],
+
+            status='booked'
+
+        ).exists()
+
+        if table_exists:
+
+            return Response({
+
+                "message":
+                "Table already booked"
+
+            }, status=400)
+
+        serializer.save(
+
+            customer=request.user
+        )
+
+        return Response(
+
+            serializer.data,
+
+            status=201
+        )
+
+What This Validation Does
+
+Prevents:
+
+Table 2
+7 PM
+today
+
+Booked twice
+
+Very important business rule.
+
+views.py
+
+class MyReservationsView(APIView):
+
+    permission_classes = [
+
+        IsAuthenticated
+    ]
+
+    def get(self, request):
+
+        reservations = Reservation.objects.filter(
+
+            customer=request.user
+
+        ).order_by(
+
+            '-reservation_date'
+        )
+
+        serializer = ReservationSerializer(
+
+            reservations,
+
+            many=True
+        )
+
+        return Response(
+
+            serializer.data
+        )
+
+urls.py
+
+from django.urls import path
+
+from .views import (
+
+    CreateReservationView,
+
+    MyReservationsView
+)
+
+urlpatterns = [
+
+    path(
+
+        "create/",
+
+        CreateReservationView.as_view()
+    ),
+
+    path(
+
+        "my/",
+
+        MyReservationsView.as_view()
+    ),
+]
+
+
+connect to core url
+
+path(
+
+   'api/reservations/',
+
+   include('reservations.urls')
+
+),
+
+What You Added
+
+Now your system supports:
+
+✅ Table booking
+✅ Duplicate prevention
+✅ User reservations
+✅ Business validation
+✅ Authentication-protected booking
+
+Your café backend is now becoming feature-complete.
+
+Inventory management 
+
+python manage.py startapp inventory
+
+models.py
+
+from django.db import models
+
+from menu.models import MenuItem
+
+
+class Inventory(models.Model):
+
+    menu_item = models.OneToOneField(
+
+        MenuItem,
+
+        on_delete=models.CASCADE,
+
+        related_name='inventory'
+    )
+
+    quantity_available = models.PositiveIntegerField()
+
+    low_stock_threshold = models.PositiveIntegerField(
+
+        default=10
+    )
+
+    updated_at = models.DateTimeField(
+
+        auto_now=True
+    )
+
+    def __str__(self):
+
+        return self.menu_item.name
+
+Why OneToOne?
+Burger → one inventory record
+
+Cold Coffee → one inventory record
+
+Simple and clean.
+
+python manage.py makemigrations
+python manage.py migrate
+
+
+Register Admin
+
+from django.contrib import admin
+
+from .models import Inventory
+
+admin.site.register(Inventory)
+
+Serializer
+
+from rest_framework import serializers
+
+from .models import Inventory
+
+
+class InventorySerializer(
+
+    serializers.ModelSerializer
+):
+
+    item_name = serializers.CharField(
+
+        source='menu_item.name',
+
+        read_only=True
+    )
+
+    class Meta:
+
+        model = Inventory
+
+        fields = '__all__'
+
+Create APIs
+
+from rest_framework import generics
+
+from .models import Inventory
+
+from .serializers import InventorySerializer
+
+
+class InventoryListView(
+
+    generics.ListAPIView
+):
+
+    queryset = Inventory.objects.all()
+
+    serializer_class = InventorySerializer
+
+
+class InventoryCreateView(
+
+    generics.CreateAPIView
+):
+
+    queryset = Inventory.objects.all()
+
+    serializer_class = InventorySerializer
+
+
+urls.py
+
+from django.urls import path
+
+from .views import (
+
+    InventoryListView,
+
+    InventoryCreateView
+)
+
+urlpatterns = [
+
+    path(
+
+        "list/",
+
+        InventoryListView.as_view()
+    ),
+
+    path(
+
+        "create/",
+
+        InventoryCreateView.as_view()
+    ),
+]
+
+
+
+core/urls.py
+
+path('api/inventory/',include('inventory.urls')),
+
+
+orders/views.py
+
+replace this in that 
+
+class PlaceOrderView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        cart = Cart.objects.filter(
+            customer=request.user
+        ).first()
+
+        if not cart:
+            return Response({
+                "message": "Cart empty"
+            }, status=400)
+
+        cart_items = cart.cart_items.all()
+
+        if not cart_items:
+            return Response({
+                "message": "Cart empty"
+            }, status=400)
+
+        # STEP 1: Check inventory for all items
+        for item in cart_items:
+
+            try:
+                inventory = Inventory.objects.get(
+                    menu_item=item.menu_item
+                )
+
+            except Inventory.DoesNotExist:
+                return Response({
+                    "message":
+                    f"Inventory not available for "
+                    f"{item.menu_item.name}"
+                }, status=400)
+
+            if inventory.quantity_available < item.quantity:
+                return Response({
+                    "message":
+                    f"Not enough stock for "
+                    f"{item.menu_item.name}"
+                }, status=400)
+
+        # STEP 2: Create order
+        order = Order.objects.create(
+            customer=request.user
+        )
+
+        total = Decimal("0")
+
+        # STEP 3: Create order items + reduce inventory
+        for item in cart_items:
+
+            inventory = Inventory.objects.get(
+                menu_item=item.menu_item
+            )
+
+            OrderItem.objects.create(
+                order=order,
+                menu_item=item.menu_item,
+                quantity=item.quantity,
+                price=item.menu_item.price
+            )
+
+            inventory.quantity_available -= item.quantity
+            inventory.save()
+
+            total += (
+                item.menu_item.price *
+                item.quantity
+            )
+
+        # STEP 4: Save total
+        order.total_price = total
+        order.save()
+
+        # STEP 5: Clear cart
+        cart_items.delete()
+
+        return Response({
+
+            "message": "Order placed",
+
+            "order_id": order.id,
+
+            "total": total
+        })
+
+
+inventaory/views.py
+
+class LowStockView(
+
+    generics.ListAPIView
+):
+
+    serializer_class = InventorySerializer
+
+    def get_queryset(self):
+
+        return Inventory.objects.filter(
+
+            quantity_available__lte=10
+        )
+
+urls.py
+path(
+
+   "low-stock/",
+
+   LowStockView.as_view()
+),
+
+
+
+TESTING INVENTORY API
+
+STEP 1 - GET JWT TOKEN  -> http://127.0.0.1:8000/api/token/
+
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzg2MjY3OTY4LCJpYXQiOjE3ODYyNjc2NjgsImp0aSI6IjBiNzFhODYwYzE2OTRiMTVhOWE4YmY1NmViMjc4MDUzIiwidXNlcl9pZCI6IjEifQ.1DPFVFsZSs-v5eQJEsEkVuhq3dmfh0jUKnPqZDBt5eE
+
+STEP 2 - CREATE MENU INVENTORY
+
+http://127.0.0.1:8000/api/inventory/create/
+
+BODY -> 
+
+{
+    "menu_item": 1,
+    "quantity_available": 50,
+    "low_stock_threshold": 10
+}
+
+OUTPUT - 
+{
+    "id": 1,
+    "item_name": "Cheese Veg Burger",
+    "quantity_available": 50,
+    "low_stock_threshold": 10,
+    "updated_at": "2026-08-09T09:29:30.671778Z",
+    "menu_item": 1
+}
+
+
+STEP 3 — Add Food to Cart
+
+http://127.0.0.1:8000/api/orders/cart/add/
+
+Post
+
+Authorization -> Bearer token 
+
+paster token 
+
+body ->
+
+{
+    "menu_item_id": 1,
+    "quantity": 5
+}
+
+output ->
+
+{
+    "message": "Added to cart"
+}
+
+
+STEP 4 - VIEW CART
+
+http://127.0.0.1:8000/api/orders/cart/
+
+
+OUTPUT - 
+{
+    "items": [
+        {
+            "id": 2,
+            "item_name": "Cheese Veg Burger",
+            "item_price": "250.00",
+            "quantity": 6
+        }
+    ],
+    "total_price": 1500.0
+}
+
+
+STEP 5 — Place Order
+
+http://127.0.0.1:8000/api/orders/place-order/
+
+
+Authorization
+
+Bearer Token:
+
+YOUR_ACCESS_TOKEN
+
+Body
+
+You don't need to send anything.
+
+Select:
+
+Body → none
+
+
+
+
+Your PlaceOrderView does:------------
+
+Get customer's cart
+        ↓
+Check inventory
+        ↓
+Is stock >= requested quantity?
+        ↓
+       YES
+        ↓
+Create Order
+        ↓
+Create OrderItem
+        ↓
+Reduce Inventory
+        ↓
+Calculate total
+        ↓
+Clear Cart
+
+
+50 stock
+   -
+5 ordered
+   =
+45 remaining
+
+
+
+STEP 6 — Check Inventory
+
+http://127.0.0.1:8000/api/inventory/list/
+
+[
+    {
+        "id": 1,
+        "item_name": "Cheese Veg Burger",
+        "quantity_available": 44,
+        "low_stock_threshold": 10,
+        "updated_at": "2026-08-09T09:38:18.794454Z",
+        "menu_item": 1
+    }
+]
+
+
+Before order:
+quantity_available = 50
+
+After ordering 5:
+quantity_available = 44
+
+
+STEP 7 — Check Order History 
+
+GET - http://127.0.0.1:8000/api/orders/history/
+
+Bearer YOUR_ACCESS_TOKEN
+
+[
+    {
+        "id": 2,
+        "status": "pending",
+        "total_price": "1500.00",
+        "created_at": "2026-08-09T09:38:18.780007Z",
+        "items": [
+            {
+                "item_name": "Cheese Veg Burger",
+                "quantity": 6,
+                "price": "250.00"
+            }
+        ]
+    },
+    {
+        "id": 1,
+        "status": "preparing",
+        "total_price": "750.00",
+        "created_at": "2026-06-04T15:38:13.722095Z",
+        "items": [
+            {
+                "item_name": "Cheese Veg Burger",
+                "quantity": 3,
+                "price": "250.00"
+            }
+        ]
+    }
+]
+
+STEP 8 — Verify Cart Is Empty
+
+http://127.0.0.1:8000/api/orders/cart/
+
+provide token 
+
+output 
+{
+    "items": [],
+    "total_price": 0.0
+}
+
+Because your PlaceOrderView contains:
+
+cart_items.delete()
+
+So after successful checkout:
+
+Cart → Empty
+Order → Created
+Inventory → Reduced
+
+
+
+STEP 9 — Test Insufficient Stock
+
+http://127.0.0.1:8000/api/orders/cart/add/
+
+pass token 
+body - 
+{
+    "menu_item_id": 1,
+    "quantity": 50
+}
+
+
+then place order 
+output should be 
+
+{
+    "message": "Not enough stock for Veg Burger"
+}
+
+STEP 10 — Test Low Stock API
+
+http://127.0.0.1:8000/api/inventory/low-stock/
+
+output 
+
+Currently:
+
+45 > 10
+
+so the item shouldn't appear.
+
+Later, if stock becomes:
+
+8
+
+then it should appear in the low-stock response.
+
+POSTMAN COLLECTION - 
+
+BREWBYTE CAFE
+│
+├── Authentication
+│   └── Generate JWT
+│
+├── Menu
+│   ├── List Categories
+│   ├── List Menu Items
+│   ├── Create Menu Item
+│   ├── Update Menu Item
+│   └── Delete Menu Item
+│
+├── Cart
+│   ├── Add To Cart
+│   └── View Cart
+│
+├── Orders
+│   ├── Place Order
+│   ├── Order History
+│   └── Update Order Status
+│
+├── Reservations
+│   ├── Create Reservation
+│   └── My Reservations
+│
+└── Inventory
+    ├── Create Inventory
+    ├── List Inventory
+    └── Low Stock
+
+
+
+
+
+COUPON MODULE -----
+
+
+python manage.py startapp coupons
+
+settings.py
+INSTALLED_APPS = [
+    ...
+    'coupons',
+]
+
+coupons/models.py
+
+from django.db import models
+
+
+class Coupon(models.Model):
+
+    code = models.CharField(
+        max_length=50,
+        unique=True
+    )
+
+    discount_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2
+    )
+
+    minimum_order_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
+
+    expiry_date = models.DateTimeField()
+
+    is_active = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    def __str__(self):
+        return self.code
+
+
+
+
+what each field means
+
+Code:          WELCOME10
+Discount:      10%
+Minimum:       ₹500
+Expiry:        31 Aug 2026
+Active:        Yes
+
+
+A customer can use:
+
+WELCOME10
+
+and receive 10% off if their order is at least ₹500.
+
+
+MIGRATIONS
+
+python manage.py makemigrations
+
+MIGRATE
+
+python manage.py migrate
+
+
+coupons/admins.py
+
+from django.contrib import admin
+from .models import Coupon
+
+
+admin.site.register(Coupon)
+
+
+Now you can create coupons through Django Admin.
+
+
+
+serializers.py
+
+from rest_framework import serializers
+from .models import Coupon
+
+
+class CouponSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Coupon
+        fields = '__all__'
+
+
+
+COUPON API
+
+views.py
+
+from django.utils import timezone
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+
+from .models import Coupon
+from .serializers import CouponSerializer
+
+
+class CreateCouponView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        serializer = CouponSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        serializer.save()
+
+        return Response(
+            serializer.data,
+            status=201
+        )
+
+
+class ValidateCouponView(APIView):
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+
+        code = request.data.get("code")
+
+        if not code:
+
+            return Response({
+                "message": "Coupon code is required"
+            }, status=400)
+
+        try:
+
+            coupon = Coupon.objects.get(
+                code=code.upper()
+            )
+
+        except Coupon.DoesNotExist:
+
+            return Response({
+                "message": "Invalid coupon code"
+            }, status=400)
+
+        if not coupon.is_active:
+
+            return Response({
+                "message": "Coupon is inactive"
+            }, status=400)
+
+        if coupon.expiry_date < timezone.now():
+
+            return Response({
+                "message": "Coupon has expired"
+            }, status=400)
+
+        return Response({
+
+            "message": "Coupon is valid",
+
+            "coupon": CouponSerializer(
+                coupon
+            ).data
+        })
+
+
+
+THIS API CHECKS
+
+Does coupon exist?
+       ↓
+Is it active?
+       ↓
+Has it expired?
+       ↓
+YES → Coupon valid
+
+
+MAIN URLS.PY
+
+path(
+    'api/coupons/',
+    include('coupons.urls')
+),
+
+
+TESTING COUPON CREATION
+
+python manage.py runserver
+
+
+POST - http://127.0.0.1:8000/api/coupons/create/
+
+AUTHORIZATION - BEARER TOKEN
+BODY 
+{
+    "code": "WELCOME10",
+    "discount_percentage": "10.00",
+    "minimum_order_amount": "500.00",
+    "expiry_date": "2026-12-31T23:59:59Z",
+    "is_active": true
+}
+
+OUTPUT
+{
+    "id": 1,
+    "code": "WELCOME10",
+    "discount_percentage": "10.00",
+    "minimum_order_amount": "500.00",
+    "expiry_date": "2026-12-31T23:59:59Z",
+    "is_active": true,
+    "created_at": "..."
+}
+
+
+Test Coupon Validation
+POST
+http://127.0.0.1:8000/api/coupons/validate/
+
+Authorization:
+
+Bearer ACCESS_TOKEN
+
+Body:
+
+{
+    "code": "WELCOME10"
+}
+
+Expected:
+
+{
+    "message": "Coupon is valid",
+    "coupon": {
+        "id": 1,
+        "code": "WELCOME10",
+        "discount_percentage": "10.00",
+        "minimum_order_amount": "500.00",
+        "expiry_date": "2026-12-31T23:59:59Z",
+        "is_active": true,
+        "created_at": "..."
+    }
+}
+
+
+
+CHECKOUT API ---------
+
+At checkout we'll only calculate and preview the amount.
+
+We will not deduct inventory or create the final paid order yet.
+
+
+Checkout
+   ↓
+Payment
+   ↓
+Payment Success
+   ↓
+Create/confirm Order
+   ↓
+Deduct Inventory
+
+
+
+FLOW OF PAYMENTS - 
+
+Cart
+ ↓
+Checkout API
+ ↓
+Calculate subtotal
+ ↓
+Validate coupon
+ ↓
+Calculate discount
+ ↓
+Calculate final amount
+ ↓
+Return amount to frontend
+ ↓
+Payment later
+
+
+Checkout will NOT create an order, deduct inventory, or clear the cart. We'll do those after successful payment.
+
+
+python manage.py startapp checkout
+
+SETTINGS.PY
+
+INSTALLED_APPS = [
+    ...
+    'checkout',
+]
+
+checkout/serializers.py
+
+from rest_framework import serializers
+
+
+class CheckoutSerializer(serializers.Serializer):
+
+    coupon_code = serializers.CharField(
+        required=False,
+        allow_blank=True
+    )
+
+
+This means the customer can checkout:
+
+Without coupon
+{}
+
+or:
+
+With coupon
+{
+    "coupon_code": "WELCOME10"
+}
+
+
+
+STEP 3 — Create Checkout API
+
+Open:
+
+checkout/views.py
+
+Add:
+
+from decimal import Decimal
+        applied_coupon = None
+
+
+        if coupon_code:
+
+
+            try:
+
+
+                coupon = Coupon.objects.get(
+                    code=coupon_code.upper()
+                )
+
+
+            except Coupon.DoesNotExist:
+
+
+                return Response({
+                    "message": "Invalid coupon code"
+                }, status=400)
+
+
+            # Check active
+            if not coupon.is_active:
+
+
+                return Response({
+                    "message": "Coupon is inactive"
+                }, status=400)
+
+
+            # Check expiry
+            if coupon.expiry_date < timezone.now():
+
+
+                return Response({
+                    "message": "Coupon has expired"
+                }, status=400)
+
+
+            # Check minimum order amount
+            if subtotal < coupon.minimum_order_amount:
+
+
+                return Response({
+
+
+                    "message":
+                    "Minimum order amount for this coupon is "
+                    f"{coupon.minimum_order_amount}"
+
+
+                }, status=400)
+
+
+            # Calculate discount
+            discount = (
+                subtotal *
+                coupon.discount_percentage /
+                Decimal("100")
+            )
+
+
+            applied_coupon = coupon.code
+
+
+        # -----------------------------
+        # STEP 5: Calculate final amount
+        # -----------------------------
+
+
+        final_amount = subtotal - discount
+
+
+        # -----------------------------
+        # STEP 6: Return checkout
+        # -----------------------------
+
+
+        return Response({
+
+
+            "items": items,
+
+
+            "subtotal": subtotal,
+
+
+            "discount": discount,
+
+
+            "total": final_amount,
+
+
+            "coupon": applied_coupon
+        })
+STEP 4 — Create Checkout URLs
+
+Create:
+
+checkout/urls.py
+
+Add:
+
+from django.urls import path
+
+
+from .views import CheckoutView
+
+
+
+
+urlpatterns = [
+
+
+    path(
+        "calculate/",
+        CheckoutView.as_view()
+    ),
+
+
+]
+STEP 5 — Connect to Main URLs
+
+Open:
+
+core/urls.py
+
+Add:
+
+path(
+    'api/checkout/',
+    include('checkout.urls')
+),
+
+Make sure you have:
+
+from django.urls import path, include
+STEP 6 — Start Server
+
+Run:
+
+python manage.py runserver
+
+
+testing 
+
+Add to cart
+
+POST
+
+http://127.0.0.1:8000/api/orders/cart/add/
+
+Authorization:
+
+Bearer ACCESS_TOKEN
+
+Body:
+
+{
+    "menu_item_id": 1,
+    "quantity": 2
+}
+
+Now call Checkout
+POST
+http://127.0.0.1:8000/api/checkout/calculate/
+
+Authorization:
+
+Bearer ACCESS_TOKEN
+
+Body:
+
+{}
+
+Expected response:
+
+{
+    "items": [
+        {
+            "menu_item_id": 1,
+            "name": "Veg Burger",
+            "quantity": 2,
+            "price": "220.00",
+            "item_total": "440.00"
+        }
+    ],
+    "subtotal": "440.00",
+    "discount": "0",
+    "total": "440.00",
+    "coupon": null
+}
+
+Your actual price will depend on your menu item.
+
+
+
+STEP 8 — Test Checkout WITH Coupon
+
+Let's say you already created:
+
+WELCOME10
+
+with:
+
+Discount = 10%
+Minimum order = ₹500
+
+Make sure your cart subtotal is above ₹500.
+
+For example:
+
+Burger × 3
+₹220 × 3
+
+
+Subtotal = ₹660
+
+Now call:
+
+POST
+http://127.0.0.1:8000/api/checkout/calculate/
+
+Authorization:
+
+Bearer ACCESS_TOKEN
+
+Body:
+
+{
+    "coupon_code": "WELCOME10"
+}
+
+Expected:
+
+{
+    "items": [
+        {
+            "menu_item_id": 1,
+            "name": "Veg Burger",
+            "quantity": 3,
+            "price": "220.00",
+            "item_total": "660.00"
+        }
+    ],
+    "subtotal": "660.00",
+    "discount": "66.00",
+    "total": "594.00",
+    "coupon": "WELCOME10"
+}
+
+So:
+
+Subtotal       ₹660
+Discount 10%   -₹66
+-------------------
+Final Total    ₹594
+
+
+STEP 9 — Test Minimum Order Validation
+
+This is an important business-rule test.
+
+Suppose:
+
+WELCOME10
+Minimum order = ₹500
+
+And your cart is:
+
+Subtotal = ₹440
+
+Send:
+
+{
+    "coupon_code": "WELCOME10"
+}
+
+You should receive:
+
+{
+    "message": "Minimum order amount for this coupon is 500.00"
+}
+
+That's good.
+
+The coupon is valid, but the cart doesn't qualify.
+
+STEP 10 — Test Invalid Coupon
+
+Send:
+
+{
+    "coupon_code": "ABC123"
+}
+
+Expected:
+
+{
+    "message": "Invalid coupon code"
+}
+
+
+
+
+                                                                             ARCHITECTURE TILL NOW 
+                    ┌──────────────┐
+                    │    React         │
+                    └──────┬───────┘
+                             │
+                             ▼
+                    ┌──────────────┐
+                    │   Checkout       │
+                    │     API          │
+                    └──────┬───────┘
+                             │
+              ┌───────────────────────┐
+              ▼             ▼               ▼
+            Cart          Coupon            Menu
+              │             │                │
+              └───────────────────────┘
+                            ▼
+                       Final Amount
+                            │
+                            ▼
+                         Payment
+                            │
+                            ▼
+                          Order
+                            │
+                   ┌──────┴──────┐
+                   ▼                 ▼
+                Inventory       Order Status
+
+
+PAYMENT MODULE ---
+
+python manage.py startapp payments
+
+INSTALLED_APPS = [
+    ...
+    'payments',
+]
+
+STEP 2 — Create Payment Model
+
+Open:
+
+payments/models.py
+
+Add:
+
+from django.db import models
+
+
+from users.models import User
+
+
+
+
+class Payment(models.Model):
+
+
+    PAYMENT_METHOD_CHOICES = (
+        ('card', 'Card'),
+        ('upi', 'UPI'),
+        ('cash', 'Cash'),
+    )
+
+
+    PAYMENT_STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+    )
+
+
+    customer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payments'
+    )
+
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHOD_CHOICES
+    )
+
+
+    status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default='pending'
+    )
+
+
+    transaction_id = models.CharField(
+        max_length=100,
+        unique=True
+    )
+
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+
+    def __str__(self):
+        return self.transaction_id
+
+
+
+Why are we storing transaction_id?
+
+A real payment system needs a unique identifier for every payment.
+
+For example:
+
+TXN-20260822-ABC123
+
+Later, when we integrate a real payment gateway, this can be replaced by the gateway's transaction/payment ID.
+
+
+STEP 3 — Migrate
+
+Run:
+
+python manage.py makemigrations
+
+Then:
+
+python manage.py migrate
+STEP 4 — Register Payment in Admin
+
+Open:
+
+payments/admin.py
+
+Add:
+
+from django.contrib import admin
+
+
+from .models import Payment
+
+
+
+
+admin.site.register(Payment)
+STEP 5 — Payment Serializer
+
+Create:
+
+payments/serializers.py
+
+Add:
+
+from rest_framework import serializers
+
+
+from .models import Payment
+
+
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+
+
+    class Meta:
+
+
+        model = Payment
+
+
+        fields = [
+            'id',
+            'amount',
+            'payment_method',
+            'status',
+            'transaction_id',
+            'created_at'
+        ]
+
+
+        read_only_fields = [
+            'id',
+            'amount',
+            'status',
+            'transaction_id',
+            'created_at'
+        ]
+
+The customer should not be able to send:
+
+{
+    "amount": 1
+}
+
+and manipulate the payment amount.
+
+The backend calculates the amount from the cart/checkout.
+
+STEP 6 — Create Payment API
+
+Now create:
+
+payments/views.py
+
+We'll initially simulate payment processing.
+
+import uuid
+
+
+            inventory = Inventory.objects.get(
+
+
+                menu_item=item.menu_item
+            )
+
+
+            if inventory.quantity_available < item.quantity:
+
+
+                payment.status = "failed"
+
+
+                payment.save()
+
+
+                order.delete()
+
+
+                return Response({
+
+
+                    "message":
+                    f"Not enough stock for "
+                    f"{item.menu_item.name}"
+
+
+                }, status=400)
+
+
+            OrderItem.objects.create(
+
+
+                order=order,
+
+
+                menu_item=item.menu_item,
+
+
+                quantity=item.quantity,
+
+
+                price=item.menu_item.price
+            )
+
+
+            inventory.quantity_available -= (
+                item.quantity
+            )
+
+
+            inventory.save()
+
+
+        # -----------------------------
+        # STEP 10: Clear Cart
+        # -----------------------------
+
+
+        cart_items.delete()
+
+
+        # -----------------------------
+        # STEP 11: Return Response
+        # -----------------------------
+
+
+        return Response({
+
+
+            "message":
+            "Payment successful",
+
+
+            "payment": PaymentSerializer(
+                payment
+            ).data,
+
+
+            "order_id":
+            order.id,
+
+
+            "total":
+            final_amount
+        }, status=201)
+STEP 7 — Create Payment URL
+
+Create:
+
+payments/urls.py
+
+Add:
+
+from django.urls import path
+
+
+from .views import CreatePaymentView
+
+
+
+
+urlpatterns = [
+
+
+    path(
+        "create/",
+        CreatePaymentView.as_view()
+    ),
+
+
+]
+STEP 8 — Connect Payment URLs
+
+Open:
+
+core/urls.py
+
+Add:
+
+path(
+    'api/payments/',
+    include('payments.urls')
+),
+
+Make sure you have:
+
+from django.urls import path, include 
+
+
+
+STEP 9 — Test the Complete Payment Flow
+
+Before testing payment, make sure your cart has food.
+
+For example:
+
+Veg Burger × 2
+
+and inventory has:
+
+50
+Payment API
+POST
+http://127.0.0.1:8000/api/payments/create/
+
+Authorization:
+
+Bearer ACCESS_TOKEN
+
+Body:
+
+{
+    "payment_method": "upi"
+}
+Expected Response
+
+Something similar to:
+
+{
+    "message": "Payment successful",
+    "payment": {
+        "id": 1,
+        "amount": "440.00",
+        "payment_method": "upi",
+        "status": "success",
+        "transaction_id": "TXN-A83F92C1D4E5",
+        "created_at": "2026-08-22T..."
+    },
+    "order_id": 1,
+    "total": "440.00"
+}
+Test With Coupon
+
+If your cart subtotal is ₹660 and WELCOME10 gives 10% discount:
+
+POST
+http://127.0.0.1:8000/api/payments/create/
+
+Body:
+
+{
+    "payment_method": "upi",
+    "coupon_code": "WELCOME10"
+}
+
+Calculation:
+
+Subtotal       ₹660
+Discount       ₹66
+-------------------
+Final Amount   ₹594
+
+Payment should show:
+
+{
+    "amount": "594.00",
+    "status": "success"
+}
+Verify Everything
+
+After successful payment, check:
+
+1. Order History
+GET
+http://127.0.0.1:8000/api/orders/history/
+
+You should see the newly created order.
+
+2. Inventory
+GET
+http://127.0.0.1:8000/api/inventory/list/
+
+If it was:
+
+50
+
+and you ordered:
+
+2
+
+it should now be:
+
+48
+3. Cart
+GET
+http://127.0.0.1:8000/api/orders/cart/
+
+It should be empty.
+
+One Important Improvement Before We Move On
+
+There is a race-condition/data-consistency issue in the simple implementation above.
+
+For example:
+
+Payment SUCCESS
+       ↓
+Order creation
+       ↓
+Inventory check
+       ↓
+Stock unavailable
+
+We then mark payment failed and delete the order, but in a real payment system, you cannot simply pretend a successful external payment never happened.
+
+Later, we'll solve this using:
+
+transaction.atomic()
+
+and a proper payment/order state machine.
+
+We'll also separate:
+
+Payment
+Order
+Inventory
+
+more cleanly.
+
+That is worth doing because it gives you a strong Django transactions + database consistency topic for interviews.
+
+
+
+
+this is actually a good sign. Your Payment API is reaching the inventory validation correctly. The error is:
+
+{
+    "message": "Not enough stock for Cheese Veg Burger"
+}
+
+So the problem is not payment. Your cart contains more Cheese Veg Burger than the available inventory.
+
+Let's troubleshoot it step by step.
+
+Step 1 — Check Current Inventory
+
+In Postman, call your inventory API:
+
+GET
+http://127.0.0.1:8000/api/inventory/list/
+
+Use your existing Bearer token if your inventory API requires authentication.
+
+Look for:
+
+{
+    "menu_item": 1,
+    "item_name": "Cheese Veg Burger",
+    "quantity_available":  ...
+}
+
+For example, you might see:
+
+{
+    "id": 1,
+    "menu_item": 1,
+    "quantity_available": 2,
+    "low_stock_threshold": 10,
+    "item_name": "Cheese Veg Burger"
+}
+Step 2 — Check What Is Currently in Your Cart
+
+Call:
+
+GET
+http://127.0.0.1:8000/api/orders/cart/
+
+You may see:
+
+{
+    "items": [
+        {
+            "menu_item": 1,
+            "name": "Cheese Veg Burger",
+            "quantity": 5
+        }
+    ],
+    "total_price": "..."
+}
+
+Now compare:
+
+Inventory:
+Cheese Veg Burger = 2
+
+
+Cart:
+Cheese Veg Burger = 5
+
+That's why payment is returning:
+
+Not enough stock for Cheese Veg Burger
+Step 3 — Easiest Solution for Testing
+
+Since we're currently developing the project, increase the inventory.
+
+Go to your Django Admin or use your inventory update functionality if you've created one.
+
+For example, change:
+
+Cheese Veg Burger
+Quantity = 2
+
+to:
+
+Cheese Veg Burger
+Quantity = 50
+
+Then check again:
+
+GET
+http://127.0.0.1:8000/api/inventory/list/
+
+You should see:
+
+quantity_available: 50
+Step 4 — Don't Add More Items to the Existing Cart
+
+This is important because your AddToCartView does:
+
+cart_item.quantity += serializer.validated_data["quantity"]
+
+So if your cart already contains:
+
+Cheese Veg Burger × 5
+
+and you send:
+
+{
+    "menu_item_id": 1,
+    "quantity": 5
+}
+
+you will now have:
+
+5 + 5 = 10
+
+You don't want that accidentally.
+
+So first check:
+
+GET
+http://127.0.0.1:8000/api/orders/cart/
+Step 5 — If Your Cart Already Has 5
+
+If your cart contains:
+
+Cheese Veg Burger × 5
+
+and inventory is:
+
+50
+
+that's perfectly fine.
+
+You don't need to add anything else.
+
+Go directly to Payment.
+
+Step 6 — Call Payment Again
+POST
+http://127.0.0.1:8000/api/payments/create/
+Authorization
+Bearer ACCESS_TOKEN
+Body → raw → JSON
+{
+    "payment_method": "upi"
+}
+Step 7 — Expected Result
+
+If:
+
+Inventory = 50
+Cart = 5
+
+then payment should succeed.
+
+You should get something like:
+
+{
+    "message": "Payment successful",
+    "payment": {
+        "id": 1,
+        "amount": "....",
+        "payment_method": "upi",
+        "status": "success",
+        "transaction_id": "TXN-XXXXXXXXXXXX",
+        "created_at": "..."
+    },
+    "order_id": 1,
+    "total": "...."
+}
+
+And inventory should become:
+
+50 - 5 = 45
